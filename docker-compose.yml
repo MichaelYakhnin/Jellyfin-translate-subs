@@ -1,0 +1,51 @@
+version: '3.8'
+
+services:
+  libretranslate:
+    container_name: libretranslate
+    image: libretranslate/libretranslate:latest
+    ports:
+      - "5000:5000"
+    restart: unless-stopped
+    healthcheck:
+      test: ['CMD-SHELL', './venv/bin/python scripts/healthcheck.py']
+      interval: 10s
+      timeout: 4s
+      retries: 4
+      start_period: 5s
+
+  subtitle-translator-api:
+    build:
+      context: .
+      dockerfile: src/JellyfinSubtitleTranslator/Dockerfile
+    container_name: subtitle-translator-api
+    ports:
+      - "5001:5001"
+    user: root  
+    volumes:
+      - /home/mike/Videos:/media
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Production
+      - Translator__MediaPath=/media
+      - Translator__TargetLanguage=rus
+      - Translator__LibreTranslateUrl=http://libretranslate:5000
+      - Translator__MaxBatchSize=50
+      - Translator__MaxConcurrency=2
+      - Translator__WebhookProcessingDelayMs=5000
+      - Translator__Jellyfin__BaseUrl=http://10.100.102.34:8096
+      - Translator__Jellyfin__ApiKey=${JELLYFIN_API_KEY}
+      - Translator__Jellyfin__UserId=${JELLYFIN_USER_ID}
+    restart: unless-stopped
+    depends_on:
+      libretranslate:
+        condition: service_healthy
+
+  subtitle-translator-ui:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: subtitle-translator-ui
+    ports:
+      - "3000:80"
+    restart: unless-stopped
+
