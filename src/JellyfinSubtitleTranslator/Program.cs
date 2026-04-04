@@ -25,6 +25,10 @@ builder.Services.Configure<TranslatorOptions>(options =>
         ApiKey = builder.Configuration["Translator:Jellyfin:ApiKey"] ?? builder.Configuration["Jellyfin:ApiKey"] ?? "",
         UserId = builder.Configuration["Translator:Jellyfin:UserId"] ?? builder.Configuration["Jellyfin:UserId"] ?? ""
     };
+
+    options.PathMappings = builder.Configuration.GetSection("Translator:PathMappings").Get<List<PathMapping>>()
+        ?? builder.Configuration.GetSection("PathMappings").Get<List<PathMapping>>()
+        ?? new List<PathMapping>();
 });
 
 builder.Services.AddControllers();
@@ -33,6 +37,7 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSingleton<IFileQueue, FileQueue>();
 builder.Services.AddSingleton<ISrtParser, SrtParser>();
 builder.Services.AddSingleton<ILanguageMapper, LanguageMapper>();
+builder.Services.AddSingleton<IPathMapper, PathMapper>();
 
 //builder.Services.AddSingleton<IWebhookProcessingService, WebhookProcessingService>();
 builder.Services.AddSingleton<ISubtitleTranslationService, SubtitleTranslationService>();

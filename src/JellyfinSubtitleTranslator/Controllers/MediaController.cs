@@ -36,23 +36,23 @@ public class MediaController : ControllerBase
             if (!string.IsNullOrEmpty(libraryId))
             {
                 var libraryItems = await _jellyfinService.GetLibraryItemsAsync(libraryId, cancellationToken);
-                items = libraryItems.Select(MapToDto).ToList();
+                items = [.. libraryItems.Select(MapToDto)];
             }
             else if (string.Equals(type, "movies", StringComparison.OrdinalIgnoreCase))
             {
                 var movies = await _jellyfinService.GetMoviesAsync(cancellationToken);
-                items = movies.Select(MapToDto).ToList();
+                items = [.. movies.Select(MapToDto)];
             }
             else if (string.Equals(type, "episodes", StringComparison.OrdinalIgnoreCase))
             {
                 var episodes = await _jellyfinService.GetEpisodesAsync(cancellationToken);
-                items = episodes.Select(MapToDto).ToList();
+                items = [.. episodes.Select(MapToDto)];
             }
             else
             {
                 var movies = await _jellyfinService.GetMoviesAsync(cancellationToken);
                 var episodes = await _jellyfinService.GetEpisodesAsync(cancellationToken);
-                items = movies.Concat(episodes).Select(MapToDto).ToList();
+                items = [.. movies.Concat(episodes).Select(MapToDto)];
             }
 
             foreach (var item in items)

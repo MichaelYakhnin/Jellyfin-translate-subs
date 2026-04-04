@@ -13,6 +13,7 @@ public class TranslatorOptions
     public int MaxRetryAttempts { get; set; } = 3;
     public int RetryBaseDelayMs { get; set; } = 1000;
     public JellyfinOptions Jellyfin { get; set; } = new();
+    public List<PathMapping> PathMappings { get; set; } = new();
 }
 
 public class JellyfinOptions
@@ -20,4 +21,10 @@ public class JellyfinOptions
     public string BaseUrl { get; set; } = "http://localhost:8096";
     public string ApiKey { get; set; } = string.Empty;
     public string UserId { get; set; } = string.Empty;
+}
+
+public class PathMapping
+{
+    public string WindowsPath { get; set; } = string.Empty;
+    public string DockerPath { get; set; } = string.Empty;
 }

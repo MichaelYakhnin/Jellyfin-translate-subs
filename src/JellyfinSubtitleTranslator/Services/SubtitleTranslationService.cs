@@ -33,19 +33,22 @@ public class SubtitleTranslationService : ISubtitleTranslationService
     private readonly ISrtParser _srtParser;
     private readonly ITranslationClient _translationClient;
     private readonly ILanguageMapper _languageMapper;
+    private readonly IPathMapper _pathMapper;
 
     public SubtitleTranslationService(
         ILogger<SubtitleTranslationService> logger,
         IOptions<TranslatorOptions> options,
         ISrtParser srtParser,
         ITranslationClient translationClient,
-        ILanguageMapper languageMapper)
+        ILanguageMapper languageMapper,
+        IPathMapper pathMapper)
     {
         _logger = logger;
         _options = options.Value;
         _srtParser = srtParser;
         _translationClient = translationClient;
         _languageMapper = languageMapper;
+        _pathMapper = pathMapper;
     }
 
     public List<string> DiscoverSubtitles(string mediaPath, string? targetLanguage = null)
@@ -55,7 +58,9 @@ public class SubtitleTranslationService : ISubtitleTranslationService
         if (string.IsNullOrEmpty(mediaPath))
             return subtitles;
 
-        var mediaDirectory = Path.GetDirectoryName(mediaPath);
+        var mappedPath = _pathMapper.MapToDockerPath(mediaPath);
+        var mediaDirectory = Path.GetDirectoryName(mappedPath);
+        
         if (string.IsNullOrEmpty(mediaDirectory) || !Directory.Exists(mediaDirectory))
         {
             _logger.LogWarning("Media directory not found: {MediaDirectory}", mediaDirectory);
@@ -109,7 +114,7 @@ public class SubtitleTranslationService : ISubtitleTranslationService
     public async Task<TranslationResult> TranslateSubtitlesAsync(IEnumerable<string> subtitlePaths, string? targetLanguage = null, CancellationToken cancellationToken = default)
     {
         var result = new TranslationResult();
-        var paths = subtitlePaths.ToList();
+        var paths = subtitlePaths.Select(p => _pathMapper.MapToDockerPath(p)).ToList();
         var lang = targetLanguage ?? _options.TargetLanguage;
         var targetLangIso6392 = _languageMapper.ToIso6392(lang);
 
