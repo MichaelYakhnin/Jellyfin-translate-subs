@@ -7,6 +7,8 @@ services:
     ports:
       - "5000:5000"
     restart: unless-stopped
+    environment:
+      - LT_LOAD_ONLY=en,ru,he
     healthcheck:
       test: ['CMD-SHELL', './venv/bin/python scripts/healthcheck.py']
       interval: 10s
@@ -23,7 +25,7 @@ services:
       - "5001:5001"
     user: root  
     volumes:
-      - /home/mike/Videos:/media
+      - /home:/home
     environment:
       - ASPNETCORE_ENVIRONMENT=Production
       - Translator__MediaPath=/media
@@ -31,8 +33,7 @@ services:
       - Translator__LibreTranslateUrl=http://libretranslate:5000
       - Translator__MaxBatchSize=50
       - Translator__MaxConcurrency=2
-      - Translator__WebhookProcessingDelayMs=5000
-      - Translator__Jellyfin__BaseUrl=http://10.100.102.34:8096
+      - Translator__Jellyfin__BaseUrl=http://host.docker.internal:8096
       - Translator__Jellyfin__ApiKey=${JELLYFIN_API_KEY}
       - Translator__Jellyfin__UserId=${JELLYFIN_USER_ID}
     restart: unless-stopped

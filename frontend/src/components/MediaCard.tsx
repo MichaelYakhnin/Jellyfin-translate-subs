@@ -1,13 +1,19 @@
-import type { MediaItemWithStatus, TranslationStatus } from '../types';
+import { useState } from 'react';
+import type { MediaItemWithStatus, TranslationStatus, Language } from '../types';
 
 interface MediaCardProps {
   item: MediaItemWithStatus;
-  onTranslate: (path: string) => void;
+  languages: Language[];
+  defaultLanguage: string;
+  onTranslate: (mediaPath: string, targetLanguage: string, subtitlePath?: string) => void;
   isSelected: boolean;
   onSelect: (id: string) => void;
 }
 
-export function MediaCard({ item, onTranslate, isSelected, onSelect }: MediaCardProps) {
+export function MediaCard({ item, languages, defaultLanguage, onTranslate, isSelected, onSelect }: MediaCardProps) {
+  const [selectedSubtitle, setSelectedSubtitle] = useState<string>('');
+  const [selectedLanguage, setSelectedLanguage] = useState(defaultLanguage);
+
   const statusStyles: Record<TranslationStatus, { bg: string; text: string; label: string }> = {
     idle: { bg: 'bg-gray-100 dark:bg-gray-800', text: 'text-gray-600 dark:text-gray-400', label: '' },
     translating: { bg: 'bg-yellow-100 dark:bg-yellow-900', text: 'text-yellow-700 dark:text-yellow-300', label: 'Translating...' },
@@ -16,6 +22,10 @@ export function MediaCard({ item, onTranslate, isSelected, onSelect }: MediaCard
   };
 
   const statusStyle = statusStyles[item.translationStatus];
+
+  const handleTranslate = () => {
+    onTranslate(item.path, selectedLanguage, selectedSubtitle || undefined);
+  };
 
   return (
     <div
@@ -46,16 +56,46 @@ export function MediaCard({ item, onTranslate, isSelected, onSelect }: MediaCard
           />
         </div>
 
-        {item.hasSubtitles && (
-          <div className="mt-3 flex items-center text-sm text-gray-600 dark:text-gray-400">
-            <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-            </svg>
-            {item.subtitlePaths.length} subtitle(s) found
-          </div>
-        )}
+        {item.hasSubtitles ? (
+          <div className="mt-3 space-y-2">
+            <div className="flex items-center text-sm text-gray-600 dark:text-gray-400">
+              <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+              {item.subtitlePaths.length} subtitle(s) found
+            </div>
 
-        {!item.hasSubtitles && (
+            {item.subtitlePaths.length > 1 && (
+              <select
+                value={selectedSubtitle}
+                onChange={(e) => setSelectedSubtitle(e.target.value)}
+                className="w-full px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+              >
+                <option value="">All subtitles</option>
+                {item.subtitlePaths.map((path, i) => (
+                  <option key={i} value={path}>
+                    {path.split('/').pop()?.replace('.srt', '') || `Subtitle ${i + 1}`}
+                  </option>
+                ))}
+              </select>
+            )}
+
+            <div className="flex items-center space-x-2">
+              <span className="text-sm text-gray-600 dark:text-gray-400">To:</span>
+              <select
+                value={selectedLanguage}
+                onChange={(e) => setSelectedLanguage(e.target.value)}
+                className="flex-1 px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+              >
+                {languages.map((lang) => (
+                  <option key={lang.code} value={lang.code}>
+                    {lang.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+        ) : (
           <div className="mt-3 flex items-center text-sm text-gray-400 dark:text-gray-500">
             <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
@@ -76,7 +116,7 @@ export function MediaCard({ item, onTranslate, isSelected, onSelect }: MediaCard
 
       <div className="px-4 py-3 bg-gray-50 dark:bg-gray-700 border-t border-gray-100 dark:border-gray-600">
         <button
-          onClick={() => onTranslate(item.path)}
+          onClick={handleTranslate}
           disabled={item.translationStatus === 'translating' || !item.hasSubtitles}
           className={`
             w-full py-2 px-4 rounded-md font-medium transition-all
@@ -95,7 +135,7 @@ export function MediaCard({ item, onTranslate, isSelected, onSelect }: MediaCard
               Translating...
             </span>
           ) : (
-            'Translate Subtitles'
+            `Translate to ${languages.find(l => l.code === selectedLanguage)?.name || selectedLanguage}`
           )}
         </button>
       </div>

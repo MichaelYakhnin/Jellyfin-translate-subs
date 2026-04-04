@@ -1,6 +1,7 @@
 using JellyfinSubtitleTranslator.Models;
 using JellyfinSubtitleTranslator.Services;
 using Microsoft.AspNetCore.Mvc;
+using SysFile = System.IO.File;
 
 namespace JellyfinSubtitleTranslator.Controllers;
 
@@ -10,7 +11,6 @@ public class TranslateController : ControllerBase
 {
     private readonly ILogger<TranslateController> _logger;
     private readonly ISubtitleTranslationService _translationService;
-    //private readonly IWebhookProcessingService? _webhookProcessingService;
 
     public TranslateController(
         ILogger<TranslateController> logger,
@@ -23,34 +23,52 @@ public class TranslateController : ControllerBase
     [HttpPost("manual")]
     public async Task<IActionResult> TranslateManual([FromBody] TranslateRequest request, CancellationToken cancellationToken)
     {
-        if (string.IsNullOrEmpty(request.Path))
+        if (string.IsNullOrEmpty(request.MediaPath))
         {
-            return BadRequest(new { error = "Path is required" });
+            return BadRequest(new { error = "MediaPath is required" });
         }
 
-        _logger.LogInformation("Manual translation requested for: {Path}", request.Path);
+        _logger.LogInformation("Manual translation requested for: {Path}, TargetLang: {TargetLang}, Subtitle: {SubtitlePath}", 
+            request.MediaPath, request.TargetLanguage ?? "default", request.SubtitlePath ?? "auto");
 
         try
         {
-            var subtitles = _translationService.DiscoverSubtitles(request.Path);
+            List<string> subtitlePaths;
 
-            if (subtitles.Count == 0)
+            if (!string.IsNullOrEmpty(request.SubtitlePath))
+            {
+                if (!SysFile.Exists(request.SubtitlePath))
+                {
+                    return BadRequest(new { error = "Subtitle file not found", path = request.SubtitlePath });
+                }
+                subtitlePaths = new List<string> { request.SubtitlePath };
+            }
+            else
+            {
+                subtitlePaths = _translationService.DiscoverSubtitles(request.MediaPath);
+            }
+
+            if (subtitlePaths.Count == 0)
             {
                 return Ok(new
                 {
                     success = false,
                     message = "No subtitles found",
-                    path = request.Path
+                    path = request.MediaPath
                 });
             }
 
-            var result = await _translationService.TranslateSubtitlesAsync(subtitles, cancellationToken);
+            var result = await _translationService.TranslateSubtitlesAsync(
+                subtitlePaths, 
+                request.TargetLanguage, 
+                cancellationToken);
 
             return Ok(new
             {
                 success = result.Success,
                 message = result.Message,
-                path = request.Path,
+                path = request.MediaPath,
+                targetLanguage = request.TargetLanguage ?? "default",
                 translatedFiles = result.TranslatedFiles.Select(f => new
                 {
                     source = f.SourcePath,
@@ -62,7 +80,7 @@ public class TranslateController : ControllerBase
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error translating {Path}", request.Path);
+            _logger.LogError(ex, "Error translating {Path}", request.MediaPath);
             return StatusCode(500, new { error = "Translation failed", message = ex.Message });
         }
     }
@@ -70,30 +88,50 @@ public class TranslateController : ControllerBase
     [HttpPost("batch")]
     public async Task<IActionResult> TranslateBatch([FromBody] BatchTranslateRequest request, CancellationToken cancellationToken)
     {
-        if (request.Paths == null || request.Paths.Count == 0)
+        if (request.Items == null || request.Items.Count == 0)
         {
-            return BadRequest(new { error = "At least one path is required" });
+            return BadRequest(new { error = "At least one item is required" });
         }
 
-        _logger.LogInformation("Batch translation requested for {Count} items", request.Paths.Count);
+        _logger.LogInformation("Batch translation requested for {Count} items, TargetLang: {TargetLang}", 
+            request.Items.Count, request.TargetLanguage ?? "default");
 
         var results = new List<object>();
 
-        foreach (var path in request.Paths)
+        foreach (var item in request.Items)
         {
             try
             {
-                var subtitles = _translationService.DiscoverSubtitles(path);
-                if (subtitles.Count == 0)
+                List<string> subtitlePaths;
+
+                if (!string.IsNullOrEmpty(item.SubtitlePath))
                 {
-                    results.Add(new { path, success = false, message = "No subtitles found" });
+                    if (!SysFile.Exists(item.SubtitlePath))
+                    {
+                        results.Add(new { mediaPath = item.MediaPath, subtitlePath = item.SubtitlePath, success = false, message = "Subtitle file not found" });
+                        continue;
+                    }
+                    subtitlePaths = new List<string> { item.SubtitlePath };
+                }
+                else
+                {
+                    subtitlePaths = _translationService.DiscoverSubtitles(item.MediaPath);
+                }
+
+                if (subtitlePaths.Count == 0)
+                {
+                    results.Add(new { mediaPath = item.MediaPath, success = false, message = "No subtitles found" });
                     continue;
                 }
 
-                var result = await _translationService.TranslateSubtitlesAsync(subtitles, cancellationToken);
+                var result = await _translationService.TranslateSubtitlesAsync(
+                    subtitlePaths, 
+                    item.TargetLanguage ?? request.TargetLanguage, 
+                    cancellationToken);
+
                 results.Add(new
                 {
-                    path,
+                    mediaPath = item.MediaPath,
                     success = result.Success,
                     message = result.Message,
                     translatedFiles = result.TranslatedFiles.Count
@@ -101,59 +139,18 @@ public class TranslateController : ControllerBase
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error translating {Path}", path);
-                results.Add(new { path, success = false, message = ex.Message });
+                _logger.LogError(ex, "Error translating {Path}", item.MediaPath);
+                results.Add(new { mediaPath = item.MediaPath, success = false, message = ex.Message });
             }
         }
 
         return Ok(new
         {
-            total = request.Paths.Count,
+            total = request.Items.Count,
+            targetLanguage = request.TargetLanguage ?? "default",
             results
         });
     }
-
-    // [HttpPost]
-    // public async Task<IActionResult> TranslateWebhook([FromBody] JellyfinWebhookPayload payload)
-    // {
-    //     if (_webhookProcessingService == null)
-    //     {
-    //         return BadRequest(new { error = "Webhook processing not enabled" });
-    //     }
-
-    //     _logger.LogInformation(
-    //         "Webhook received - Type: {NotificationType}, Item: {ItemName}, Path: {ItemPath}, Tags: [{Tags}]",
-    //         payload.NotificationType,
-    //         payload.Item?.Name ?? "N/A",
-    //         payload.Item?.Path ?? "N/A",
-    //         payload.Item?.Tags != null ? string.Join(", ", payload.Item.Tags) : "none");
-
-    //     if (!_webhookProcessingService.ShouldProcessEvent(payload))
-    //     {
-    //         return Ok(new { status = "skipped", reason = "Event type not supported" });
-    //     }
-
-    //     if (!_webhookProcessingService.HasTranslateTag(payload))
-    //     {
-    //         _logger.LogInformation("Skipped: no translate tag");
-    //         return Ok(new { status = "skipped", reason = "no translate tag" });
-    //     }
-
-    //     if (string.IsNullOrEmpty(payload.Item?.Path))
-    //     {
-    //         _logger.LogWarning("Invalid payload: Item.Path is null or empty");
-    //         return BadRequest(new { status = "error", reason = "Item.Path is required" });
-    //     }
-
-    //     var processed = await _webhookProcessingService.ProcessWebhookAsync(payload);
-
-    //     if (processed)
-    //     {
-    //         return Ok(new { status = "processing", message = "Subtitle(s) enqueued for translation" });
-    //     }
-
-    //     return Ok(new { status = "completed", message = "No subtitles to translate" });
-    // }
 
     [HttpGet("discover")]
     public IActionResult DiscoverSubtitles([FromQuery] string path)
@@ -173,6 +170,19 @@ public class TranslateController : ControllerBase
         });
     }
 
+    [HttpGet("languages")]
+    public IActionResult GetSupportedLanguages()
+    {
+        return Ok(new
+        {
+            languages = new[]
+            {
+                new { code = "rus", name = "Russian" },
+                new { code = "heb", name = "Hebrew" }
+            }
+        });
+    }
+
     [HttpGet]
     public IActionResult Health()
     {
@@ -182,10 +192,20 @@ public class TranslateController : ControllerBase
 
 public class TranslateRequest
 {
-    public string Path { get; set; } = string.Empty;
+    public string MediaPath { get; set; } = string.Empty;
+    public string? SubtitlePath { get; set; }
+    public string? TargetLanguage { get; set; }
 }
 
 public class BatchTranslateRequest
 {
-    public List<string> Paths { get; set; } = new();
+    public List<BatchTranslateItem> Items { get; set; } = new();
+    public string? TargetLanguage { get; set; }
+}
+
+public class BatchTranslateItem
+{
+    public string MediaPath { get; set; } = string.Empty;
+    public string? SubtitlePath { get; set; }
+    public string? TargetLanguage { get; set; }
 }

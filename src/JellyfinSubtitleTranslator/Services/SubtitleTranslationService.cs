@@ -6,9 +6,9 @@ namespace JellyfinSubtitleTranslator.Services;
 
 public interface ISubtitleTranslationService
 {
-    Task<TranslationResult> TranslateSubtitlesAsync(string mediaPath, CancellationToken cancellationToken = default);
-    Task<TranslationResult> TranslateSubtitlesAsync(IEnumerable<string> subtitlePaths, CancellationToken cancellationToken = default);
-    List<string> DiscoverSubtitles(string mediaPath);
+    Task<TranslationResult> TranslateSubtitlesAsync(string mediaPath, string? targetLanguage = null, CancellationToken cancellationToken = default);
+    Task<TranslationResult> TranslateSubtitlesAsync(IEnumerable<string> subtitlePaths, string? targetLanguage = null, CancellationToken cancellationToken = default);
+    List<string> DiscoverSubtitles(string mediaPath, string? targetLanguage = null);
 }
 
 public class TranslationResult
@@ -48,7 +48,7 @@ public class SubtitleTranslationService : ISubtitleTranslationService
         _languageMapper = languageMapper;
     }
 
-    public List<string> DiscoverSubtitles(string mediaPath)
+    public List<string> DiscoverSubtitles(string mediaPath, string? targetLanguage = null)
     {
         var subtitles = new List<string>();
 
@@ -63,8 +63,9 @@ public class SubtitleTranslationService : ISubtitleTranslationService
         }
 
         var mediaFileName = Path.GetFileNameWithoutExtension(mediaPath);
-        var targetLangIso6391 = _languageMapper.ToIso6391(_options.TargetLanguage);
-        var targetLangIso6392 = _languageMapper.ToIso6392(_options.TargetLanguage);
+        var lang = targetLanguage ?? _options.TargetLanguage;
+        var targetLangIso6391 = _languageMapper.ToIso6391(lang);
+        var targetLangIso6392 = _languageMapper.ToIso6392(lang);
 
         var srtFiles = Directory.GetFiles(mediaDirectory, "*.srt");
 
@@ -89,9 +90,9 @@ public class SubtitleTranslationService : ISubtitleTranslationService
         return subtitles;
     }
 
-    public async Task<TranslationResult> TranslateSubtitlesAsync(string mediaPath, CancellationToken cancellationToken = default)
+    public async Task<TranslationResult> TranslateSubtitlesAsync(string mediaPath, string? targetLanguage = null, CancellationToken cancellationToken = default)
     {
-        var subtitles = DiscoverSubtitles(mediaPath);
+        var subtitles = DiscoverSubtitles(mediaPath, targetLanguage);
 
         if (subtitles.Count == 0)
         {
@@ -102,21 +103,23 @@ public class SubtitleTranslationService : ISubtitleTranslationService
             };
         }
 
-        return await TranslateSubtitlesAsync(subtitles, cancellationToken);
+        return await TranslateSubtitlesAsync(subtitles, targetLanguage, cancellationToken);
     }
 
-    public async Task<TranslationResult> TranslateSubtitlesAsync(IEnumerable<string> subtitlePaths, CancellationToken cancellationToken = default)
+    public async Task<TranslationResult> TranslateSubtitlesAsync(IEnumerable<string> subtitlePaths, string? targetLanguage = null, CancellationToken cancellationToken = default)
     {
         var result = new TranslationResult();
         var paths = subtitlePaths.ToList();
+        var lang = targetLanguage ?? _options.TargetLanguage;
+        var targetLangIso6392 = _languageMapper.ToIso6392(lang);
 
-        _logger.LogInformation("Starting translation for {Count} subtitle files", paths.Count);
+        _logger.LogInformation("Starting translation for {Count} subtitle files to {TargetLang}", paths.Count, lang);
 
         foreach (var subtitlePath in paths)
         {
             try
             {
-                var outputPath = GetOutputPath(subtitlePath);
+                var outputPath = GetOutputPath(subtitlePath, targetLangIso6392);
 
                 if (File.Exists(outputPath))
                 {
@@ -139,7 +142,7 @@ public class SubtitleTranslationService : ISubtitleTranslationService
                     continue;
                 }
 
-                var translatedEntries = await TranslateEntriesAsync(entries, cancellationToken);
+                var translatedEntries = await TranslateEntriesAsync(entries, lang, cancellationToken);
                 var outputContent = _srtParser.Serialize(translatedEntries);
 
                 await File.WriteAllTextAsync(outputPath, outputContent, System.Text.Encoding.UTF8, cancellationToken);
@@ -168,7 +171,7 @@ public class SubtitleTranslationService : ISubtitleTranslationService
         return result;
     }
 
-    private async Task<List<SubtitleEntry>> TranslateEntriesAsync(List<SubtitleEntry> entries, CancellationToken cancellationToken)
+    private async Task<List<SubtitleEntry>> TranslateEntriesAsync(List<SubtitleEntry> entries, string targetLanguage, CancellationToken cancellationToken)
     {
         var sourceLanguage = _options.SourceLanguage;
 
@@ -178,7 +181,7 @@ public class SubtitleTranslationService : ISubtitleTranslationService
             sourceLanguage = await _translationClient.DetectLanguageAsync(sampleText, cancellationToken);
         }
 
-        var targetLanguageIso6391 = _languageMapper.ToIso6391(_options.TargetLanguage);
+        var targetLangIso6391 = _languageMapper.ToIso6391(targetLanguage);
         var translatedEntries = new List<SubtitleEntry>();
 
         var batches = entries
@@ -204,7 +207,7 @@ public class SubtitleTranslationService : ISubtitleTranslationService
             var translatedText = await _translationClient.TranslateAsync(
                 combinedText,
                 sourceLanguage,
-                targetLanguageIso6391,
+                targetLangIso6391,
                 cancellationToken);
 
             var translatedLines = translatedText.Split('\n');
@@ -237,12 +240,11 @@ public class SubtitleTranslationService : ISubtitleTranslationService
         return translatedEntries;
     }
 
-    private string GetOutputPath(string inputPath)
+    private string GetOutputPath(string inputPath, string targetLangIso6392)
     {
         var directory = Path.GetDirectoryName(inputPath) ?? ".";
         var fileName = Path.GetFileNameWithoutExtension(inputPath);
         var extension = Path.GetExtension(inputPath);
-        var targetLang = _languageMapper.ToIso6392(_options.TargetLanguage);
-        return Path.Combine(directory, $"{fileName}.{targetLang}{extension}");
+        return Path.Combine(directory, $"{fileName}.{targetLangIso6392}{extension}");
     }
 }

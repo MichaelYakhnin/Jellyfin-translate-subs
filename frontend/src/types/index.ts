@@ -21,6 +21,7 @@ export interface TranslationResult {
   success: boolean;
   message: string;
   path: string;
+  targetLanguage: string;
   translatedFiles: {
     source: string;
     output: string;
@@ -34,4 +35,10 @@ export type TranslationStatus = 'idle' | 'translating' | 'done' | 'error';
 export interface MediaItemWithStatus extends MediaItem {
   translationStatus: TranslationStatus;
   translationMessage?: string;
+  selectedSubtitlePath?: string;
+}
+
+export interface Language {
+  code: string;
+  name: string;
 }

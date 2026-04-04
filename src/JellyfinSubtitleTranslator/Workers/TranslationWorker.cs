@@ -83,17 +83,18 @@ public class TranslationWorker : BackgroundService
             return;
         }
 
-        var sourceLanguage = string.IsNullOrEmpty(_options.SourceLanguage)
-            ? "auto"
-            : _languageMapper.ToIso6391(_options.SourceLanguage);
+        var sourceLanguage = _options.SourceLanguage;
+        var targetLanguageIso6391 = _languageMapper.ToIso6391(_options.TargetLanguage);
 
-        var targetLanguage = _languageMapper.ToIso6391(_options.TargetLanguage);
-
-        if (string.IsNullOrEmpty(_options.SourceLanguage))
+        if (string.IsNullOrEmpty(sourceLanguage))
         {
             var sampleText = string.Join(" ", entries.Take(5).Select(e => e.Text));
             sourceLanguage = await _translationClient.DetectLanguageAsync(sampleText, cancellationToken);
             _logger.LogInformation("Worker {WorkerId}: Detected source language: {SourceLanguage}", workerId, sourceLanguage);
+        }
+        else
+        {
+            sourceLanguage = _languageMapper.ToIso6391(sourceLanguage);
         }
 
         var outputPath = GetOutputPath(filePath, sourceLanguage);
@@ -104,20 +105,73 @@ public class TranslationWorker : BackgroundService
             return;
         }
 
-        _logger.LogInformation("Worker {WorkerId}: Translating file using file upload method", workerId);
+        var batches = entries
+            .Select((entry, index) => new { entry, index })
+            .GroupBy(x => x.index / _options.MaxBatchSize)
+            .Select(g => g.Select(x => x.entry).ToList())
+            .ToList();
 
-        var translatedContent = await _translationClient.TranslateFileAsync(
-            filePath,
-            sourceLanguage,
-            targetLanguage,
-            cancellationToken);
+        var translatedEntries = new List<Models.SubtitleEntry>();
 
-        await File.WriteAllTextAsync(outputPath, translatedContent, System.Text.Encoding.UTF8, cancellationToken);
+        foreach (var batch in batches)
+        {
+            var textsToTranslate = batch
+                .Where(e => !string.IsNullOrWhiteSpace(e.Text))
+                .Select(e => e.Text)
+                .ToList();
+
+            if (textsToTranslate.Count == 0)
+            {
+                translatedEntries.AddRange(batch);
+                continue;
+            }
+
+            var combinedText = string.Join("\n", textsToTranslate);
+
+            var translatedText = await _translationClient.TranslateAsync(
+                combinedText,
+                sourceLanguage,
+                targetLanguageIso6391,
+                cancellationToken);
+
+            var translatedLines = translatedText.Split('\n');
+
+            int translatedIndex = 0;
+            foreach (var entry in batch)
+            {
+                if (string.IsNullOrWhiteSpace(entry.Text))
+                {
+                    translatedEntries.Add(entry);
+                }
+                else if (translatedIndex < translatedLines.Length)
+                {
+                    var translatedEntry = new Models.SubtitleEntry
+                    {
+                        Index = entry.Index,
+                        StartTime = entry.StartTime,
+                        EndTime = entry.EndTime,
+                        Lines = translatedLines[translatedIndex].Split('\n').ToList()
+                    };
+                    translatedEntries.Add(translatedEntry);
+                    translatedIndex++;
+                }
+                else
+                {
+                    translatedEntries.Add(entry);
+                }
+            }
+
+            _logger.LogDebug("Worker {WorkerId}: Translated batch of {BatchSize} entries", workerId, batch.Count);
+        }
+
+        var outputContent = _srtParser.Serialize(translatedEntries);
+        await File.WriteAllTextAsync(outputPath, outputContent, System.Text.Encoding.UTF8, cancellationToken);
 
         _logger.LogInformation(
-            "Worker {WorkerId}: Translation completed. Output: {OutputPath}",
+            "Worker {WorkerId}: Translation completed. Output: {OutputPath} ({EntryCount} entries)",
             workerId,
-            outputPath);
+            outputPath,
+            translatedEntries.Count);
     }
 
     private string GetOutputPath(string inputPath, string? detectedSourceLang = null)

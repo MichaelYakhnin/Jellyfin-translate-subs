@@ -1,11 +1,19 @@
 import { useState, useEffect, useCallback } from 'react';
 import { MediaCard } from './components/MediaCard';
-import type { MediaItemWithStatus, Library } from './types';
-import { fetchMedia, fetchLibraries, translateMedia, batchTranslate } from './services/api';
+import type { MediaItemWithStatus, Library, Language } from './types';
+import { fetchMedia, fetchLibraries, translateMedia, batchTranslate, fetchLanguages } from './services/api';
+
+const DEFAULT_LANGUAGE = 'rus';
 
 function App() {
   const [media, setMedia] = useState<MediaItemWithStatus[]>([]);
   const [libraries, setLibraries] = useState<Library[]>([]);
+  const [languages, setLanguages] = useState<Language[]>([
+    { code: 'rus', name: 'Russian' },
+    { code: 'heb', name: 'Hebrew' }
+  ]);
+  const [defaultLanguage] = useState(DEFAULT_LANGUAGE);
+  const [batchLanguage, setBatchLanguage] = useState(DEFAULT_LANGUAGE);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -35,18 +43,27 @@ function App() {
     }
   }, []);
 
+  const loadLanguages = useCallback(async () => {
+    try {
+      const langs = await fetchLanguages();
+      if (langs.length > 0) {
+        setLanguages(langs);
+      }
+    } catch (err) {
+      console.error('Failed to load languages:', err);
+    }
+  }, []);
+
   useEffect(() => {
     loadMedia();
   }, [loadMedia]);
 
   useEffect(() => {
     loadLibraries();
-  }, [loadLibraries]);
+    loadLanguages();
+  }, [loadLibraries, loadLanguages]);
 
-  const handleTranslate = async (path: string) => {
-    const item = media.find(m => m.path === path);
-    if (!item) return;
-
+  const handleTranslate = async (path: string, targetLanguage: string, subtitlePath?: string) => {
     setMedia(prev => prev.map(m => 
       m.path === path 
         ? { ...m, translationStatus: 'translating' as const, translationMessage: undefined }
@@ -54,7 +71,7 @@ function App() {
     ));
 
     try {
-      const result = await translateMedia(path);
+      const result = await translateMedia(path, targetLanguage, subtitlePath);
       setMedia(prev => prev.map(m => 
         m.path === path 
           ? { 
@@ -84,8 +101,8 @@ function App() {
     ));
 
     try {
-      const paths = selectedItems.map(m => m.path);
-      await batchTranslate(paths);
+      const items = selectedItems.map(m => ({ mediaPath: m.path }));
+      await batchTranslate(items, batchLanguage);
       
       setMedia(prev => prev.map(m => 
         selectedIds.has(m.id)
@@ -181,11 +198,21 @@ function App() {
       {selectedCount > 0 && (
         <div className="bg-purple-600 text-white shadow-md">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-wrap items-center justify-between gap-3">
               <span className="text-sm font-medium">
                 {selectedCount} selected ({selectedWithSubtitles} with subtitles)
               </span>
-              <div className="flex gap-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-sm">Translate to:</span>
+                <select
+                  value={batchLanguage}
+                  onChange={(e) => setBatchLanguage(e.target.value)}
+                  className="px-2 py-1 bg-purple-700 text-white rounded text-sm border border-purple-500"
+                >
+                  {languages.map(lang => (
+                    <option key={lang.code} value={lang.code}>{lang.name}</option>
+                  ))}
+                </select>
                 <button
                   onClick={() => setSelectedIds(new Set())}
                   className="px-3 py-1.5 text-sm font-medium bg-purple-700 rounded-md hover:bg-purple-800 transition-colors"
@@ -245,6 +272,8 @@ function App() {
                 <MediaCard
                   key={item.id}
                   item={item}
+                  languages={languages}
+                  defaultLanguage={defaultLanguage}
                   onTranslate={handleTranslate}
                   isSelected={selectedIds.has(item.id)}
                   onSelect={handleSelect}

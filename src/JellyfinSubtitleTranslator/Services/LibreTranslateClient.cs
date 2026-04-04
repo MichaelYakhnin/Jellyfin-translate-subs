@@ -40,7 +40,7 @@ public class LibreTranslateClient : ITranslationClient
                 BackoffType = DelayBackoffType.Exponential,
                 ShouldHandle = new PredicateBuilder<HttpResponseMessage>()
                     .Handle<HttpRequestException>()
-                    .Handle<TaskCanceledException>()
+                    .Handle<TaskCanceledException>(ex => ex.InnerException is IOException or System.Net.Sockets.SocketException)
                     .HandleResult(r => !r.IsSuccessStatusCode && (int)r.StatusCode >= 500),
                 OnRetry = args =>
                 {
@@ -60,6 +60,11 @@ public class LibreTranslateClient : ITranslationClient
         if (string.IsNullOrWhiteSpace(text))
             return text;
 
+        if (cancellationToken.IsCancellationRequested)
+        {
+            _logger.LogWarning("Request was cancelled by caller!");
+        }
+
         var request = new TranslateRequest
         {
             Q = text,
@@ -67,9 +72,10 @@ public class LibreTranslateClient : ITranslationClient
             Target = targetLanguage
         };
 
-        var response = await _retryPipeline.ExecuteAsync(
-            async ct => await _httpClient.PostAsJsonAsync("/translate", request, ct),
-            cancellationToken);
+        // var response = await _retryPipeline.ExecuteAsync(
+        //     async ct => await _httpClient.PostAsJsonAsync("/translate", request, ct),
+        //     cancellationToken);
+        var response = await _httpClient.PostAsJsonAsync("/translate", request, cancellationToken);
 
         response.EnsureSuccessStatusCode();
 
@@ -110,9 +116,7 @@ public class LibreTranslateClient : ITranslationClient
         form.Add(new StringContent(string.IsNullOrEmpty(sourceLanguage) ? "auto" : sourceLanguage), "source_lang");
         form.Add(new StringContent(targetLanguage), "target_lang");
 
-        var response = await _retryPipeline.ExecuteAsync(
-            async ct => await _httpClient.PostAsync("/translate_file", form, ct),
-            cancellationToken);
+        var response = await _httpClient.PostAsync("/translate_file", form, cancellationToken);
 
         if (response.StatusCode == System.Net.HttpStatusCode.NotImplemented)
         {

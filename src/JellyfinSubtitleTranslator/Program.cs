@@ -39,7 +39,7 @@ builder.Services.AddSingleton<ISubtitleTranslationService, SubtitleTranslationSe
 
 builder.Services.AddHttpClient<ITranslationClient, LibreTranslateClient>(client =>
 {
-    client.Timeout = TimeSpan.FromMinutes(5);
+    client.Timeout = TimeSpan.FromMinutes(15);
 });
 
 builder.Services.AddHttpClient<IJellyfinService, JellyfinService>(client =>
