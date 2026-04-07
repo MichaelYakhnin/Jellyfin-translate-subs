@@ -12,6 +12,7 @@ public class TranslatorOptions
     public int WebhookProcessingDelayMs { get; set; } = 5000;
     public int MaxRetryAttempts { get; set; } = 3;
     public int RetryBaseDelayMs { get; set; } = 1000;
+    public string TranslationMode { get; set; } = "file";
     public JellyfinOptions Jellyfin { get; set; } = new();
     public List<PathMapping> PathMappings { get; set; } = new();
 }

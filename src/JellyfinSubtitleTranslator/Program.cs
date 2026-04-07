@@ -18,6 +18,7 @@ builder.Services.Configure<TranslatorOptions>(options =>
     options.WebhookProcessingDelayMs = int.Parse(builder.Configuration["Translator:WebhookProcessingDelayMs"] ?? "5000");
     options.MaxRetryAttempts = int.Parse(builder.Configuration["Translator:MaxRetryAttempts"] ?? "3");
     options.RetryBaseDelayMs = int.Parse(builder.Configuration["Translator:RetryBaseDelayMs"] ?? "1000");
+    options.TranslationMode = builder.Configuration["Translator:TranslationMode"] ?? "file";
 
     options.Jellyfin = new JellyfinOptions
     {
