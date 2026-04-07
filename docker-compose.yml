@@ -25,7 +25,7 @@ services:
       - "5001:5001"
     user: root  
     volumes:
-      - /home:/home
+      - E:\:/home
     environment:
       - ASPNETCORE_ENVIRONMENT=Production
       - Translator__MediaPath=/media
@@ -47,6 +47,6 @@ services:
       dockerfile: Dockerfile
     container_name: subtitle-translator-ui
     ports:
-      - "3000:80"
+      - "3010:80"
     restart: unless-stopped
 
