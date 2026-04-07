@@ -29,7 +29,7 @@ public class PathMapper : IPathMapper
             {
                 var relativePath = path[mapping.WindowsPath.Length..].TrimStart(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
                 var dockerPath = Path.Combine(mapping.DockerPath, relativePath);
-                return dockerPath.Replace(Path.DirectorySeparatorChar, '/');
+                return dockerPath.Replace('\\', '/');
             }
         }
 

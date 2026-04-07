@@ -60,7 +60,7 @@ public class SubtitleTranslationService : ISubtitleTranslationService
 
         var mappedPath = _pathMapper.MapToDockerPath(mediaPath);
         var mediaDirectory = Path.GetDirectoryName(mappedPath);
-        
+
         if (string.IsNullOrEmpty(mediaDirectory) || !Directory.Exists(mediaDirectory))
         {
             _logger.LogWarning("Media directory not found: {MediaDirectory}", mediaDirectory);
@@ -80,11 +80,6 @@ public class SubtitleTranslationService : ISubtitleTranslationService
 
             if (fileName.EndsWith($".{targetLangIso6391}", StringComparison.OrdinalIgnoreCase) ||
                 fileName.EndsWith($".{targetLangIso6392}", StringComparison.OrdinalIgnoreCase))
-            {
-                continue;
-            }
-
-            if (!fileName.StartsWith(mediaFileName, StringComparison.OrdinalIgnoreCase))
             {
                 continue;
             }
