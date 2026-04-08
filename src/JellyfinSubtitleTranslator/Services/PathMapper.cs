@@ -11,10 +11,12 @@ public interface IPathMapper
 public class PathMapper : IPathMapper
 {
     private readonly TranslatorOptions _options;
+    private readonly ILogger<PathMapper> _logger;
 
-    public PathMapper(IOptions<TranslatorOptions> options)
+    public PathMapper(IOptions<TranslatorOptions> options, ILogger<PathMapper> logger)
     {
         _options = options.Value;
+        _logger = logger;
     }
 
     public string MapToDockerPath(string path)
@@ -29,7 +31,9 @@ public class PathMapper : IPathMapper
             {
                 var relativePath = path[mapping.WindowsPath.Length..].TrimStart(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
                 var dockerPath = Path.Combine(mapping.DockerPath, relativePath);
-                return dockerPath.Replace('\\', '/');
+                var result = dockerPath.Replace('\\', '/');
+                _logger.LogInformation("Mapped Windows path '{WindowsPath}' to Docker path '{DockerPath}'", path, result);
+                return result;
             }
         }
 

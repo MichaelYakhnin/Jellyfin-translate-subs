@@ -50,7 +50,7 @@ public class SubtitleDiscoveryService : ISubtitleDiscoveryService
         foreach (var srtFile in srtFiles)
         {
             var fileName = Path.GetFileNameWithoutExtension(srtFile);
-
+            _logger.LogInformation("Checking subtitle file: {FilePath}", srtFile);
             if (fileName.EndsWith($".{targetLangIso6391}", StringComparison.OrdinalIgnoreCase) ||
                 fileName.EndsWith($".{targetLangIso6392}", StringComparison.OrdinalIgnoreCase))
             {
@@ -58,11 +58,11 @@ public class SubtitleDiscoveryService : ISubtitleDiscoveryService
                 continue;
             }
 
-            if (!fileName.StartsWith(mediaFileName, StringComparison.OrdinalIgnoreCase))
-            {
-                _logger.LogDebug("Skipping unrelated subtitle: {FilePath}", srtFile);
-                continue;
-            }
+            // if (!fileName.StartsWith(mediaFileName, StringComparison.OrdinalIgnoreCase))
+            // {
+            //     _logger.LogDebug("Skipping unrelated subtitle: {FilePath}", srtFile);
+            //     continue;
+            // }
 
             subtitles.Add(srtFile);
         }

@@ -84,10 +84,10 @@ public class SubtitleTranslationService : ISubtitleTranslationService
                 continue;
             }
 
-            if (!fileName.StartsWith(mediaFileName, StringComparison.OrdinalIgnoreCase))
-            {
-                continue;
-            }
+            // if (!fileName.StartsWith(mediaFileName, StringComparison.OrdinalIgnoreCase))
+            // {
+            //     continue;
+            // }
 
             subtitles.Add(srtFile);
         }
